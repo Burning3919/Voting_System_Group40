@@ -1,0 +1,356 @@
+{% extends "polls/base.html" %}
+
+{% block content %}
+<div id="app">
+    <div v-if="!isLoggedIn">
+        <ul class="nav nav-tabs">
+            <li class="nav-item">
+                <a class="nav-link" :class="{ active: activeTab === 'login' }" href="#" @click.prevent="activeTab = 'login'">登录</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" :class="{ active: activeTab === 'register' }" href="#" @click.prevent="activeTab = 'register'">注册</a>
+            </li>
+        </ul>
+
+        <!-- 登录表单 -->
+        <div v-if="activeTab === 'login'" class="card">
+            <div class="card-body">
+                <h5 class="card-title">用户登录</h5>
+                <div class="alert alert-danger" v-if="loginError">{{ loginError }}</div>
+                <form @submit.prevent="login">
+                    <div class="mb-3">
+                        <label for="loginEmail" class="form-label">邮箱</label>
+                        <input type="email" class="form-control" id="loginEmail" v-model="loginForm.email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="loginPassword" class="form-label">密码</label>
+                        <input type="password" class="form-control" id="loginPassword" v-model="loginForm.password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" :disabled="isLoading">
+                        <span v-if="isLoading">登录中...</span>
+                        <span v-else>登录</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 注册表单 -->
+        <div v-if="activeTab === 'register'" class="card">
+            <div class="card-body">
+                <h5 class="card-title">用户注册</h5>
+                <div class="alert alert-danger" v-if="registerError">{{ registerError }}</div>
+                <form @submit.prevent="register">
+                    <div class="mb-3">
+                        <label for="registerName" class="form-label">姓名</label>
+                        <input type="text" class="form-control" id="registerName" v-model="registerForm.name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="registerEmail" class="form-label">邮箱</label>
+                        <input type="email" class="form-control" id="registerEmail" v-model="registerForm.email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="registerPassword" class="form-label">密码</label>
+                        <input type="password" class="form-control" id="registerPassword" v-model="registerForm.password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" :disabled="isLoading">
+                        <span v-if="isLoading">注册中...</span>
+                        <span v-else>注册</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户仪表板 -->
+    <div v-if="isLoggedIn">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>欢迎, {{ user.name }}!</h2>
+            <button class="btn btn-danger" @click="logout">退出</button>
+        </div>
+
+        <ul class="nav nav-tabs">
+            <li class="nav-item">
+                <a class="nav-link" :class="{ active: dashboardTab === 'polls' }" href="#" @click.prevent="dashboardTab = 'polls'">我的投票</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" :class="{ active: dashboardTab === 'profile' }" href="#" @click.prevent="dashboardTab = 'profile'">个人资料</a>
+            </li>
+        </ul>
+
+        <!-- 我的投票 -->
+        <div v-if="dashboardTab === 'polls'" class="card">
+            <div class="card-body">
+                <h5 class="card-title">我的投票</h5>
+                
+                <div v-if="polls.length === 0" class="alert alert-info">
+                    您还没有创建任何投票。
+                </div>
+                
+                <table v-else class="table">
+                    <thead>
+                        <tr>
+                            <th>标题</th>
+                            <th>创建时间</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="poll in polls" :key="poll.poll_id">
+                            <td>{{ poll.title }}</td>
+                            {% verbatim %}
+                            <td>{{ formatDate(poll.created_at) }}</td>
+                            {% endverbatim %}
+                            <td>
+                                {% verbatim %}
+                                <span :class="poll.active ? 'badge bg-success' : 'badge bg-danger'">
+                                    {{ poll.active ? '活跃' : '已关闭' }}
+                                </span>
+                                {% endverbatim %}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" @click="viewPoll(poll.poll_id)">查看</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <button class="btn btn-success mt-3" @click="createPoll">创建新投票</button>
+            </div>
+        </div>
+
+        <!-- 个人资料 -->
+        <div v-if="dashboardTab === 'profile'" class="card">
+            <div class="card-body">
+                <h5 class="card-title">个人资料</h5>
+                <div class="alert alert-success" v-if="profileSuccess">更新成功!</div>
+                <div class="alert alert-danger" v-if="profileError">{{ profileError }}</div>
+                <form @submit.prevent="updateProfile">
+                    <div class="mb-3">
+                        <label for="profileName" class="form-label">姓名</label>
+                        <input type="text" class="form-control" id="profileName" v-model="profileForm.name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="profileEmail" class="form-label">邮箱</label>
+                        <input type="email" class="form-control" id="profileEmail" v-model="profileForm.email" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" :disabled="isLoading">保存更改</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    new Vue({
+        el: '#app',
+        data: {
+            // 认证状态
+            isLoggedIn: false,
+            isLoading: false,
+            user: null,
+            
+            // 表单数据
+            activeTab: 'login',
+            dashboardTab: 'polls',
+            loginForm: {
+                email: '',
+                password: ''
+            },
+            registerForm: {
+                name: '',
+                email: '',
+                password: ''
+            },
+            profileForm: {
+                name: '',
+                email: ''
+            },
+            
+            // 错误和成功消息
+            loginError: null,
+            registerError: null,
+            profileError: null,
+            profileSuccess: false,
+            
+            // 数据
+            polls: []
+        },
+        created() {
+            this.checkAuth();
+        },
+        methods: {
+            // 检查认证状态
+            checkAuth() {
+                const token = localStorage.getItem('access_token');
+                if (token) {
+                    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                    this.user = userData;
+                    this.isLoggedIn = true;
+                    this.profileForm.name = userData.name;
+                    this.profileForm.email = userData.email;
+                    this.fetchPolls();
+                }
+            },
+            
+            // 登录
+            async login() {
+                this.loginError = null;
+                this.isLoading = true;
+                
+                try {
+                    const response = await axios.post('/polls/api/login/', this.loginForm);
+                    
+                    localStorage.setItem('access_token', response.data.access);
+                    localStorage.setItem('refresh_token', response.data.refresh);
+                    
+                    const userData = {
+                        id: response.data.user_id,
+                        name: response.data.name
+                    };
+                    
+                    localStorage.setItem('user_data', JSON.stringify(userData));
+                    this.user = userData;
+                    this.isLoggedIn = true;
+                    this.fetchPolls();
+                } catch (error) {
+                    if (error.response) {
+                        this.loginError = error.response.data.error || '登录失败';
+                    } else {
+                        this.loginError = '网络错误，请稍后再试';
+                    }
+                } finally {
+                    this.isLoading = false;
+                }
+            },
+            
+            // 注册
+            async register() {
+                this.registerError = null;
+                this.isLoading = true;
+                
+                try {
+                    await axios.post('/polls/api/register/', this.registerForm);
+                    this.activeTab = 'login';
+                    this.loginForm.email = this.registerForm.email;
+                    this.registerForm = { name: '', email: '', password: '' };
+                    alert('注册成功，请登录');
+                } catch (error) {
+                    if (error.response) {
+                        this.registerError = Object.values(error.response.data)[0][0] || '注册失败';
+                    } else {
+                        this.registerError = '网络错误，请稍后再试';
+                    }
+                } finally {
+                    this.isLoading = false;
+                }
+            },
+            
+            // 登出
+            logout() {
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                localStorage.removeItem('user_data');
+                this.isLoggedIn = false;
+                this.user = null;
+                this.polls = [];
+            },
+            
+            // 获取用户的投票列表
+            async fetchPolls() {
+                try {
+                    const token = localStorage.getItem('access_token');
+                    const response = await axios.get('/polls/api/polls/', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    this.polls = response.data;
+                } catch (error) {
+                    console.error('获取投票列表失败', error);
+                    if (error.response && error.response.status === 401) {
+                        this.refreshToken();
+                    }
+                }
+            },
+            
+            // 更新个人资料
+            async updateProfile() {
+                this.profileError = null;
+                this.profileSuccess = false;
+                this.isLoading = true;
+
+                try {
+                    const token = localStorage.getItem('access_token');
+                    await axios.put('/polls/api/profile/', this.profileForm, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+
+                    // 更新本地存储的用户数据
+                    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+                    userData.name = this.profileForm.name;
+                    localStorage.setItem('user_data', JSON.stringify(userData));
+                    this.user = userData;
+
+                    this.profileSuccess = true;
+                } catch (error) {
+                    if (error.response) {
+                        this.profileError = Object.values(error.response.data)[0][0] || '更新失败';
+                    } else {
+                        this.profileError = '网络错误，请稍后再试';
+                    }
+
+                    if (error.response && error.response.status === 401) {
+                        this.refreshToken();
+                    }
+                } finally {
+                    this.isLoading = false;
+                }
+            },
+            
+            // 刷新令牌
+            async refreshToken() {
+                try {
+                    const refreshToken = localStorage.getItem('refresh_token');
+                    if (!refreshToken) {
+                        this.logout();
+                        return;
+                    }
+                    
+                    const response = await axios.post('/polls/api/token/refresh/', {
+                        refresh: refreshToken
+                    });
+                    
+                    localStorage.setItem('access_token', response.data.access);
+                    return true;
+                } catch (error) {
+                    this.logout();
+                    return false;
+                }
+            },
+            
+            // 格式化日期
+            formatDate(dateString) {
+                const date = new Date(dateString);
+                return date.toLocaleString();
+            },
+            
+            // 查看投票
+            viewPoll(pollId) {
+                alert(`查看投票 ${pollId} 的详情`);
+                // 这里可以实现跳转到投票详情页
+            },
+            
+            // 创建新投票
+            createPoll() {
+                alert('创建新投票功能待实现');
+                // 这里可以实现创建新投票功能
+            }
+        }
+    });
+</script>
+{% endblock %}
