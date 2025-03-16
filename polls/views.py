@@ -4,14 +4,12 @@ from .jwt import get_tokens_for_customer, generate_token
 from .serializers import (
     CustomerSerializer, PollSerializer, OptionSerializer,
     AdministratorSerializer, CustomerProfileSerializer,
-    ChangePasswordSerializer, LoginSerializer
+    ChangePasswordSerializer, LoginSerializer, PollCreateSerializer, PollUpdateSerializer
 )
 from django.views.generic import TemplateView
-from rest_framework import viewsets, generics, permissions, status
-from rest_framework.response import Response
+from rest_framework import viewsets, generics, permissions
 from rest_framework.decorators import action
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth.hashers import make_password, check_password
+from django.contrib.auth.hashers import make_password
 from django.shortcuts import get_object_or_404
 
 from .models import Customer, Poll, Option, Administrator
@@ -24,6 +22,8 @@ import jwt
 from django.conf import settings
 from .models import Customer
 from .jwt import generate_token
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
 # 保留原有的ViewSet...
 
 # 用户注册API
@@ -211,3 +211,123 @@ class RefreshTokenView(APIView):
             return Response({'error': '用户不存在'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class PollCreateAPIView(generics.CreateAPIView):
+    serializer_class = PollCreateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(customer=self.request.user)
+
+
+# 用户的投票问卷列表
+class UserPollsAPIView(generics.ListAPIView):
+    serializer_class = PollSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Poll.objects.filter(customer=self.request.user)
+
+
+# 更新投票问卷
+class PollUpdateAPIView(generics.UpdateAPIView):
+    serializer_class = PollUpdateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Poll.objects.filter(customer=self.request.user, active=True)
+
+    def update(self, request, *args, **kwargs):
+        poll = self.get_object()
+        serializer = self.get_serializer(poll, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+
+        # 更新投票问卷基本信息
+        poll.title = serializer.validated_data.get('title', poll.title)
+        poll.cut_off = serializer.validated_data.get('cut_off', poll.cut_off)
+        poll.save()
+
+        # 处理现有选项的更新和删除
+        if 'options' in serializer.validated_data:
+            for option_data in serializer.validated_data['options']:
+                if option_data.get('delete', False):
+                    # 删除选项
+                    if 'option_id' in option_data:
+                        try:
+                            option = Option.objects.get(option_id=option_data['option_id'], poll=poll)
+                            option.delete()
+                        except Option.DoesNotExist:
+                            pass
+                elif 'option_id' in option_data:
+                    # 更新选项
+                    try:
+                        option = Option.objects.get(option_id=option_data['option_id'], poll=poll)
+                        option.content = option_data['content']
+                        option.save()
+                    except Option.DoesNotExist:
+                        pass
+
+        # 添加新选项
+        if 'new_options' in serializer.validated_data:
+            for option_text in serializer.validated_data['new_options']:
+                Option.objects.create(poll=poll, content=option_text)
+
+        # 清除缓存
+        from .cache import clear_poll_cache
+        clear_poll_cache(poll.poll_id)
+
+        # 返回更新后的投票问卷
+        return Response(PollSerializer(poll).data)
+
+
+# 删除投票问卷
+class PollDeleteAPIView(generics.DestroyAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Poll.objects.filter(customer=self.request.user)
+
+    def perform_destroy(self, instance):
+        # 清除缓存
+        from .cache import clear_poll_cache
+        clear_poll_cache(instance.poll_id)
+        instance.delete()
+
+
+# 通过标识符查找投票问卷
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_poll_by_identifier(request, identifier):
+    try:
+        poll = Poll.objects.get(identifier=identifier)
+        serializer = PollSerializer(poll)
+        return Response(serializer.data)
+    except Poll.DoesNotExist:
+        return Response({"error": "找不到该投票问卷"}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])  # 允许任何人查看结果
+def poll_results(request, poll_id):
+    """
+    获取投票结果
+    """
+    poll = get_object_or_404(Poll, poll_id=poll_id)
+    serializer = PollSerializer(poll)
+    data = serializer.data
+
+    # 计算总票数
+    total_votes = sum(option['count'] for option in data['options'])
+
+    # 计算每个选项的百分比
+    for option in data['options']:
+        if total_votes > 0:
+            option['percentage'] = round((option['count'] / total_votes) * 100, 1)
+        else:
+            option['percentage'] = 0
+
+    # 添加总票数信息
+    data['total_votes'] = total_votes
+
+    return Response(data)

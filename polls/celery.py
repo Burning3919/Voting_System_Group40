@@ -19,3 +19,13 @@ app.conf.beat_schedule = {
         'schedule': 300.0,  # 每5分钟运行一次
     },
 }
+app.conf.beat_schedule = {
+    'sync-poll-data-every-5-minutes': {
+        'task': 'polls.tasks.sync_poll_data_to_db',
+        'schedule': 300.0,  # 每5分钟运行一次
+    },
+    'update-poll-status-every-hour': {
+        'task': 'polls.tasks.update_poll_status',
+        'schedule': 3600.0,  # 每小时运行一次
+    },
+}

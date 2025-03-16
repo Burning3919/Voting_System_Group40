@@ -1,356 +1,763 @@
 {% extends "polls/base.html" %}
 
 {% block content %}
-<div id="app">
-    <div v-if="!isLoggedIn">
-        <ul class="nav nav-tabs">
-            <li class="nav-item">
-                <a class="nav-link" :class="{ active: activeTab === 'login' }" href="#" @click.prevent="activeTab = 'login'">登录</a>
+<div id="pollApp">
+  <div class="container">
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">在线投票系统</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav me-auto">
+            <li class="nav-item" v-if="isLoggedIn">
+              <a class="nav-link" href="#" @click.prevent="currentView = 'myPolls'">我的投票</a>
+            </li>
+            <li class="nav-item" v-if="isLoggedIn">
+              <a class="nav-link" href="#" @click.prevent="currentView = 'createPoll'">创建投票</a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" :class="{ active: activeTab === 'register' }" href="#" @click.prevent="activeTab = 'register'">注册</a>
+              <a class="nav-link" href="#" @click.prevent="showSearchForm = true">查找投票</a>
             </li>
-        </ul>
-
-        <!-- 登录表单 -->
-        <div v-if="activeTab === 'login'" class="card">
-            <div class="card-body">
-                <h5 class="card-title">用户登录</h5>
-                <div class="alert alert-danger" v-if="loginError">{{ loginError }}</div>
-                <form @submit.prevent="login">
-                    <div class="mb-3">
-                        <label for="loginEmail" class="form-label">邮箱</label>
-                        <input type="email" class="form-control" id="loginEmail" v-model="loginForm.email" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="loginPassword" class="form-label">密码</label>
-                        <input type="password" class="form-control" id="loginPassword" v-model="loginForm.password" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary" :disabled="isLoading">
-                        <span v-if="isLoading">登录中...</span>
-                        <span v-else>登录</span>
-                    </button>
-                </form>
-            </div>
+          </ul>
+          <div class="navbar-nav" v-if="isLoggedIn">
+            <span class="nav-link">欢迎, {{ user.name }}</span>
+            <a class="nav-link" href="#" @click.prevent="currentView = 'profile'">个人资料</a>
+            <a class="nav-link" href="#" @click.prevent="logout">退出</a>
+          </div>
+          <div class="navbar-nav" v-else>
+            <a class="nav-link" href="#" @click.prevent="currentView = 'login'">登录</a>
+            <a class="nav-link" href="#" @click.prevent="currentView = 'register'">注册</a>
+          </div>
         </div>
+      </div>
+    </nav>
 
-        <!-- 注册表单 -->
-        <div v-if="activeTab === 'register'" class="card">
-            <div class="card-body">
-                <h5 class="card-title">用户注册</h5>
-                <div class="alert alert-danger" v-if="registerError">{{ registerError }}</div>
-                <form @submit.prevent="register">
-                    <div class="mb-3">
-                        <label for="registerName" class="form-label">姓名</label>
-                        <input type="text" class="form-control" id="registerName" v-model="registerForm.name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="registerEmail" class="form-label">邮箱</label>
-                        <input type="email" class="form-control" id="registerEmail" v-model="registerForm.email" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="registerPassword" class="form-label">密码</label>
-                        <input type="password" class="form-control" id="registerPassword" v-model="registerForm.password" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary" :disabled="isLoading">
-                        <span v-if="isLoading">注册中...</span>
-                        <span v-else>注册</span>
-                    </button>
-                </form>
-            </div>
+    <!-- 搜索投票表单 -->
+    <div v-if="showSearchForm" class="card mb-4">
+      <div class="card-body">
+        <h5 class="card-title">查找投票</h5>
+        <div class="input-group mb-3">
+          <input type="text" class="form-control" placeholder="请输入8位投票码" v-model="searchIdentifier" maxlength="8">
+          <button class="btn btn-primary" type="button" @click="findPoll">查找</button>
+          <button class="btn btn-secondary" type="button" @click="showSearchForm = false">取消</button>
         </div>
+      </div>
     </div>
 
-    <!-- 用户仪表板 -->
+    <!-- 认证相关组件 -->
+    <login-form v-if="!isLoggedIn && currentView === 'login'" @login-success="handleLoginSuccess"></login-form>
+    <register-form v-if="!isLoggedIn && currentView === 'register'" @register-success="currentView = 'login'"></register-form>
+
+    <!-- 已认证用户组件 -->
     <div v-if="isLoggedIn">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2>欢迎, {{ user.name }}!</h2>
-            <button class="btn btn-danger" @click="logout">退出</button>
-        </div>
-
-        <ul class="nav nav-tabs">
-            <li class="nav-item">
-                <a class="nav-link" :class="{ active: dashboardTab === 'polls' }" href="#" @click.prevent="dashboardTab = 'polls'">我的投票</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" :class="{ active: dashboardTab === 'profile' }" href="#" @click.prevent="dashboardTab = 'profile'">个人资料</a>
-            </li>
-        </ul>
-
-        <!-- 我的投票 -->
-        <div v-if="dashboardTab === 'polls'" class="card">
-            <div class="card-body">
-                <h5 class="card-title">我的投票</h5>
-                
-                <div v-if="polls.length === 0" class="alert alert-info">
-                    您还没有创建任何投票。
-                </div>
-                
-                <table v-else class="table">
-                    <thead>
-                        <tr>
-                            <th>标题</th>
-                            <th>创建时间</th>
-                            <th>状态</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="poll in polls" :key="poll.poll_id">
-                            <td>{{ poll.title }}</td>
-                            {% verbatim %}
-                            <td>{{ formatDate(poll.created_at) }}</td>
-                            {% endverbatim %}
-                            <td>
-                                {% verbatim %}
-                                <span :class="poll.active ? 'badge bg-success' : 'badge bg-danger'">
-                                    {{ poll.active ? '活跃' : '已关闭' }}
-                                </span>
-                                {% endverbatim %}
-                            </td>
-                            <td>
-                                <button class="btn btn-sm btn-primary" @click="viewPoll(poll.poll_id)">查看</button>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-                
-                <button class="btn btn-success mt-3" @click="createPoll">创建新投票</button>
-            </div>
-        </div>
-
-        <!-- 个人资料 -->
-        <div v-if="dashboardTab === 'profile'" class="card">
-            <div class="card-body">
-                <h5 class="card-title">个人资料</h5>
-                <div class="alert alert-success" v-if="profileSuccess">更新成功!</div>
-                <div class="alert alert-danger" v-if="profileError">{{ profileError }}</div>
-                <form @submit.prevent="updateProfile">
-                    <div class="mb-3">
-                        <label for="profileName" class="form-label">姓名</label>
-                        <input type="text" class="form-control" id="profileName" v-model="profileForm.name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="profileEmail" class="form-label">邮箱</label>
-                        <input type="email" class="form-control" id="profileEmail" v-model="profileForm.email" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary" :disabled="isLoading">保存更改</button>
-                </form>
-            </div>
-        </div>
+      <profile-form v-if="currentView === 'profile'" :user="user" @profile-updated="handleProfileUpdate"></profile-form>
+      <poll-list v-if="currentView === 'myPolls'" :polls="myPolls" @refresh-polls="fetchMyPolls" @edit-poll="editPoll"></poll-list>
+      <poll-form v-if="currentView === 'createPoll'" @poll-created="handlePollCreated"></poll-form>
+      <poll-edit-form v-if="currentView === 'editPoll'" :poll="currentPoll" @poll-updated="handlePollUpdated" @cancel="currentView = 'myPolls'"></poll-edit-form>
     </div>
+
+    <!-- 投票详情组件 -->
+    <poll-detail v-if="currentView === 'pollDetail'" :poll="currentPoll" @vote-submitted="handleVoteSubmitted" @close="currentView = 'myPolls'"></poll-detail>
+  </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    new Vue({
-        el: '#app',
-        data: {
-            // 认证状态
-            isLoggedIn: false,
-            isLoading: false,
-            user: null,
-            
-            // 表单数据
-            activeTab: 'login',
-            dashboardTab: 'polls',
-            loginForm: {
-                email: '',
-                password: ''
-            },
-            registerForm: {
-                name: '',
-                email: '',
-                password: ''
-            },
-            profileForm: {
-                name: '',
-                email: ''
-            },
-            
-            // 错误和成功消息
-            loginError: null,
-            registerError: null,
-            profileError: null,
-            profileSuccess: false,
-            
-            // 数据
-            polls: []
-        },
-        created() {
-            this.checkAuth();
-        },
-        methods: {
-            // 检查认证状态
-            checkAuth() {
-                const token = localStorage.getItem('access_token');
-                if (token) {
-                    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-                    this.user = userData;
-                    this.isLoggedIn = true;
-                    this.profileForm.name = userData.name;
-                    this.profileForm.email = userData.email;
-                    this.fetchPolls();
-                }
-            },
-            
-            // 登录
-            async login() {
-                this.loginError = null;
-                this.isLoading = true;
-                
-                try {
-                    const response = await axios.post('/polls/api/login/', this.loginForm);
-                    
-                    localStorage.setItem('access_token', response.data.access);
-                    localStorage.setItem('refresh_token', response.data.refresh);
-                    
-                    const userData = {
-                        id: response.data.user_id,
-                        name: response.data.name
-                    };
-                    
-                    localStorage.setItem('user_data', JSON.stringify(userData));
-                    this.user = userData;
-                    this.isLoggedIn = true;
-                    this.fetchPolls();
-                } catch (error) {
-                    if (error.response) {
-                        this.loginError = error.response.data.error || '登录失败';
-                    } else {
-                        this.loginError = '网络错误，请稍后再试';
-                    }
-                } finally {
-                    this.isLoading = false;
-                }
-            },
-            
-            // 注册
-            async register() {
-                this.registerError = null;
-                this.isLoading = true;
-                
-                try {
-                    await axios.post('/polls/api/register/', this.registerForm);
-                    this.activeTab = 'login';
-                    this.loginForm.email = this.registerForm.email;
-                    this.registerForm = { name: '', email: '', password: '' };
-                    alert('注册成功，请登录');
-                } catch (error) {
-                    if (error.response) {
-                        this.registerError = Object.values(error.response.data)[0][0] || '注册失败';
-                    } else {
-                        this.registerError = '网络错误，请稍后再试';
-                    }
-                } finally {
-                    this.isLoading = false;
-                }
-            },
-            
-            // 登出
-            logout() {
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('refresh_token');
-                localStorage.removeItem('user_data');
-                this.isLoggedIn = false;
-                this.user = null;
-                this.polls = [];
-            },
-            
-            // 获取用户的投票列表
-            async fetchPolls() {
-                try {
-                    const token = localStorage.getItem('access_token');
-                    const response = await axios.get('/polls/api/polls/', {
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
-                    this.polls = response.data;
-                } catch (error) {
-                    console.error('获取投票列表失败', error);
-                    if (error.response && error.response.status === 401) {
-                        this.refreshToken();
-                    }
-                }
-            },
-            
-            // 更新个人资料
-            async updateProfile() {
-                this.profileError = null;
-                this.profileSuccess = false;
-                this.isLoading = true;
+// 登录表单组件
+const LoginForm = {
+  template: `
+    <div class="card mb-4">
+      <div class="card-body">
+        <h5 class="card-title">用户登录</h5>
+        <div class="alert alert-danger" v-if="error">{{ error }}</div>
+        <form @submit.prevent="login">
+          <div class="mb-3">
+            <label class="form-label">邮箱</label>
+            <input type="email" class="form-control" v-model="form.email" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">密码</label>
+            <input type="password" class="form-control" v-model="form.password" required>
+          </div>
+          <button type="submit" class="btn btn-primary" :disabled="isLoading">
+            <span v-if="isLoading">登录中...</span>
+            <span v-else>登录</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  `,
+  data() {
+    return {
+      form: {
+        email: '',
+        password: ''
+      },
+      error: null,
+      isLoading: false
+    };
+  },
+  methods: {
+    async login() {
+      this.error = null;
+      this.isLoading = true;
 
-                try {
-                    const token = localStorage.getItem('access_token');
-                    await axios.put('/polls/api/profile/', this.profileForm, {
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        }
-                    });
+      try {
+        const response = await axios.post('/polls/api/login/', this.form);
 
-                    // 更新本地存储的用户数据
-                    const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
-                    userData.name = this.profileForm.name;
-                    localStorage.setItem('user_data', JSON.stringify(userData));
-                    this.user = userData;
+        localStorage.setItem('access_token', response.data.access);
+        localStorage.setItem('refresh_token', response.data.refresh);
 
-                    this.profileSuccess = true;
-                } catch (error) {
-                    if (error.response) {
-                        this.profileError = Object.values(error.response.data)[0][0] || '更新失败';
-                    } else {
-                        this.profileError = '网络错误，请稍后再试';
-                    }
+        const userData = {
+          id: response.data.user_id,
+          name: response.data.name,
+          email: response.data.user.email
+        };
 
-                    if (error.response && error.response.status === 401) {
-                        this.refreshToken();
-                    }
-                } finally {
-                    this.isLoading = false;
-                }
-            },
-            
-            // 刷新令牌
-            async refreshToken() {
-                try {
-                    const refreshToken = localStorage.getItem('refresh_token');
-                    if (!refreshToken) {
-                        this.logout();
-                        return;
-                    }
-                    
-                    const response = await axios.post('/polls/api/token/refresh/', {
-                        refresh: refreshToken
-                    });
-                    
-                    localStorage.setItem('access_token', response.data.access);
-                    return true;
-                } catch (error) {
-                    this.logout();
-                    return false;
-                }
-            },
-            
-            // 格式化日期
-            formatDate(dateString) {
-                const date = new Date(dateString);
-                return date.toLocaleString();
-            },
-            
-            // 查看投票
-            viewPoll(pollId) {
-                alert(`查看投票 ${pollId} 的详情`);
-                // 这里可以实现跳转到投票详情页
-            },
-            
-            // 创建新投票
-            createPoll() {
-                alert('创建新投票功能待实现');
-                // 这里可以实现创建新投票功能
-            }
+        localStorage.setItem('user_data', JSON.stringify(userData));
+        this.$emit('login-success', userData);
+      } catch (error) {
+        console.error('登录失败', error);
+        this.error = error.response?.data?.error || '登录失败';
+      } finally {
+        this.isLoading = false;
+      }
+    }
+  }
+};
+
+// 注册表单组件
+const RegisterForm = {
+  template: `
+    <div class="card mb-4">
+      <div class="card-body">
+        <h5 class="card-title">用户注册</h5>
+        <div class="alert alert-danger" v-if="error">{{ error }}</div>
+        <form @submit.prevent="register">
+          <div class="mb-3">
+            <label class="form-label">姓名</label>
+            <input type="text" class="form-control" v-model="form.name" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">邮箱</label>
+            <input type="email" class="form-control" v-model="form.email" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">密码</label>
+            <input type="password" class="form-control" v-model="form.password" required>
+          </div>
+          <button type="submit" class="btn btn-primary" :disabled="isLoading">
+            <span v-if="isLoading">注册中...</span>
+            <span v-else>注册</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  `,
+  data() {
+    return {
+      form: {
+        name: '',
+        email: '',
+        password: ''
+      },
+      error: null,
+      isLoading: false
+    };
+  },
+  methods: {
+    async register() {
+      this.error = null;
+      this.isLoading = true;
+
+      try {
+        await axios.post('/polls/api/register/', this.form);
+        alert('注册成功，请登录');
+        this.$emit('register-success');
+      } catch (error) {
+        console.error('注册失败', error);
+        this.error = error.response?.data?.error || '注册失败';
+      } finally {
+        this.isLoading = false;
+      }
+    }
+  }
+};
+
+// 个人资料组件
+const ProfileForm = {
+  props: ['user'],
+  template: `
+    <div class="card mb-4">
+      <div class="card-body">
+        <h5 class="card-title">个人资料</h5>
+        <div class="alert alert-success" v-if="success">更新成功!</div>
+        <div class="alert alert-danger" v-if="error">{{ error }}</div>
+        <form @submit.prevent="updateProfile">
+          <div class="mb-3">
+            <label class="form-label">姓名</label>
+            <input type="text" class="form-control" v-model="form.name" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">邮箱</label>
+            <input type="email" class="form-control" v-model="form.email" required>
+          </div>
+          <button type="submit" class="btn btn-primary" :disabled="isLoading">保存更改</button>
+        </form>
+      </div>
+    </div>
+  `,
+  data() {
+    return {
+      form: {
+        name: this.user.name,
+        email: this.user.email
+      },
+      success: false,
+      error: null,
+      isLoading: false
+    };
+  },
+  methods: {
+    async updateProfile() {
+      this.success = false;
+      this.error = null;
+      this.isLoading = true;
+
+      try {
+        const token = localStorage.getItem('access_token');
+        await axios.put('/polls/api/profile/', this.form, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        // 更新本地存储的用户数据
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        userData.name = this.form.name;
+        userData.email = this.form.email;
+        localStorage.setItem('user_data', JSON.stringify(userData));
+
+        this.success = true;
+        this.$emit('profile-updated', userData);
+      } catch (error) {
+        console.error('更新资料失败', error);
+        this.error = error.response?.data?.error || '更新失败';
+      } finally {
+        this.isLoading = false;
+      }
+    }
+  }
+};
+
+// 投票列表组件
+const PollList = {
+  props: ['polls'],
+  template: `
+    <div>
+      <h3>我的投票</h3>
+      <div class="alert alert-info" v-if="polls.length === 0">您还没有创建任何投票</div>
+      <div class="row row-cols-1 row-cols-md-2 g-4" v-else>
+        <div class="col" v-for="poll in polls" :key="poll.poll_id">
+          <div class="card h-100">
+            <div class="card-body">
+              <h5 class="card-title">{{ poll.title }}</h5>
+              <p class="card-text">
+                {% verbatim %}
+                <small class="text-muted">创建时间: {{ formatDate(poll.created_at) }}</small><br>
+                <small class="text-muted">截止时间: {{ formatDate(poll.cut_off) }}</small><br>
+
+                <span class="badge" :class="poll.active ? 'bg-success' : 'bg-danger'">
+                  {{ poll.active ? '进行中' : '已结束' }}
+                </span>
+                <span class="ms-2">投票码: {{ poll.identifier }}</span>
+                {% endverbatim %}
+              </p>
+              <h6>选项:</h6>
+              <ul class="list-group list-group-flush mb-3">
+              {% verbatim %}
+                <li class="list-group-item d-flex justify-content-between align-items-center" v-for="option in poll.options" :key="option.option_id">
+                  {{ option.content }}
+                  <span class="badge bg-primary rounded-pill">{{ option.count }}</span>
+                </li>
+                {% endverbatim %}
+              </ul>
+            </div>
+            <div class="card-footer">
+              <button class="btn btn-sm btn-primary me-2" @click="$emit('edit-poll', poll)" :disabled="!poll.active">编辑</button>
+              <button class="btn btn-sm btn-danger" @click="deletePoll(poll.poll_id)">删除</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `,
+  methods: {
+    formatDate(dateString) {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      return date.toLocaleString();
+    },
+    async deletePoll(pollId) {
+      if (!confirm('确定要删除这个投票吗？此操作不可逆。')) {
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem('access_token');
+        await axios.delete(`/polls/api/polls/${pollId}/delete/`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        alert('投票已删除');
+        this.$emit('refresh-polls');
+      } catch (error) {
+        console.error('删除投票失败', error);
+        alert('删除失败: ' + (error.response?.data?.error || '未知错误'));
+      }
+    }
+  }
+};
+
+// 创建投票表单组件
+const PollForm = {
+  template: `
+    <div class="card mb-4">
+      <div class="card-body">
+        <h3>创建投票问卷</h3>
+        <div class="alert alert-danger" v-if="error">{{ error }}</div>
+        <form @submit.prevent="createPoll">
+          <div class="mb-3">
+            <label class="form-label">标题</label>
+            <input type="text" class="form-control" v-model="form.title" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">截止时间</label>
+            <input type="datetime-local" class="form-control" v-model="form.cut_off" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">选项</label>
+            <div v-for="(option, index) in form.options" :key="index" class="input-group mb-2">
+              <input type="text" class="form-control" v-model="form.options[index]" required>
+              <button type="button" class="btn btn-danger" @click="removeOption(index)" :disabled="form.options.length <= 2">删除</button>
+            </div>
+            <button type="button" class="btn btn-secondary" @click="addOption">添加选项</button>
+          </div>
+
+          <button type="submit" class="btn btn-primary" :disabled="isSubmitting">创建投票</button>
+        </form>
+      </div>
+    </div>
+  `,
+  data() {
+    return {
+      form: {
+        title: '',
+        cut_off: this.getDefaultCutOffTime(),
+        options: ['', '']
+      },
+      error: null,
+      isSubmitting: false
+    };
+  },
+  methods: {
+    getDefaultCutOffTime() {
+      const now = new Date();
+      now.setDate(now.getDate() + 1); // 默认截止时间为明天
+      return now.toISOString().slice(0, 16); // 格式化为datetime-local输入框所需的格式
+    },
+    addOption() {
+      this.form.options.push('');
+    },
+    removeOption(index) {
+      if (this.form.options.length > 2) {
+        this.form.options.splice(index, 1);
+      }
+    },
+    async createPoll() {
+      this.error = null;
+      this.isSubmitting = true;
+
+      try {
+        const token = localStorage.getItem('access_token');
+        const response = await axios.post('/polls/api/polls/create/', this.form, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        alert('投票问卷创建成功！');
+        this.form = {
+          title: '',
+          cut_off: this.getDefaultCutOffTime(),
+          options: ['', '']
+        };
+
+        this.$emit('poll-created', response.data);
+      } catch (error) {
+        console.error('创建投票问卷失败', error);
+        this.error = error.response?.data?.error || '创建失败';
+      } finally {
+        this.isSubmitting = false;
+      }
+    }
+  }
+};
+
+// 编辑投票表单组件
+const PollEditForm = {
+  props: ['poll'],
+  template: `
+    <div class="card mb-4">
+      <div class="card-body">
+        <h3>编辑投票问卷</h3>
+        <div class="alert alert-danger" v-if="error">{{ error }}</div>
+        <form @submit.prevent="updatePoll">
+          <div class="mb-3">
+            <label class="form-label">标题</label>
+            <input type="text" class="form-control" v-model="form.title" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">截止时间</label>
+            <input type="datetime-local" class="form-control" v-model="form.cut_off" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">现有选项</label>
+            <div v-for="option in form.options" :key="option.option_id" class="input-group mb-2">
+              <input type="text" class="form-control" v-model="option.content" required>
+              <button type="button" class="btn btn-danger" @click="option.delete = true" v-if="!option.delete">删除</button>
+              <button type="button" class="btn btn-success" @click="option.delete = false" v-if="option.delete">恢复</button>
+              <div class="form-text w-100 text-danger" v-if="option.delete">此选项将被删除</div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">新增选项</label>
+            <div v-for="(option, index) in form.new_options" :key="'new-'+index" class="input-group mb-2">
+              <input type="text" class="form-control" v-model="form.new_options[index]" required>
+              <button type="button" class="btn btn-danger" @click="removeNewOption(index)">删除</button>
+            </div>
+            <button type="button" class="btn btn-secondary" @click="addNewOption">添加新选项</button>
+          </div>
+
+          <button type="submit" class="btn btn-primary" :disabled="isSubmitting">保存更改</button>
+          <button type="button" class="btn btn-secondary ms-2" @click="$emit('cancel')">取消</button>
+        </form>
+      </div>
+    </div>
+  `,
+  data() {
+    return {
+      form: {
+        title: this.poll.title,
+        cut_off: this.formatDateForInput(this.poll.cut_off),
+        options: this.poll.options.map(option => ({
+          option_id: option.option_id,
+          content: option.content,
+          delete: false
+        })),
+        new_options: []
+      },
+      error: null,
+      isSubmitting: false
+    };
+  },
+  methods: {
+    formatDateForInput(dateString) {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      return date.toISOString().slice(0, 16); // 格式化为datetime-local输入框所需的格式
+    },
+    addNewOption() {
+      this.form.new_options.push('');
+    },
+    removeNewOption(index) {
+      this.form.new_options.splice(index, 1);
+    },
+    async updatePoll() {
+      this.error = null;
+      this.isSubmitting = true;
+
+      try {
+        const token = localStorage.getItem('access_token');
+
+        // 准备更新数据
+        const updateData = {
+          title: this.form.title,
+          cut_off: this.form.cut_off,
+          options: this.form.options,
+          new_options: this.form.new_options
+        };
+
+        const response = await axios.put(`/polls/api/polls/${this.poll.poll_id}/update/`, updateData, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        alert('投票问卷更新成功！');
+        this.$emit('poll-updated', response.data);
+      } catch (error) {
+        console.error('更新投票问卷失败', error);
+        this.error = error.response?.data?.error || '更新失败';
+      } finally {
+        this.isSubmitting = false;
+      }
+    }
+  }
+};
+
+// 投票详情组件
+const PollDetail = {
+  props: ['poll'],
+  template: `
+    <div class="card mb-4">
+      <div class="card-body">
+        <h3>{{ poll.title }}</h3>
+        <p>
+        {% verbatim %}
+          <small class="text-muted">创建时间: {{ formatDate(poll.created_at) }}</small><br>
+          <small class="text-muted">截止时间: {{ formatDate(poll.cut_off) }}</small><br>
+
+          <span class="badge" :class="poll.active ? 'bg-success' : 'bg-danger'">
+
+            {{ poll.active ? '进行中' : '已结束' }}
+          </span>
+          <span class="ms-2">投票码: {{ poll.identifier }}</span>
+          {% endverbatim %}
+        </p>
+
+        <div class="alert alert-danger" v-if="!poll.active">此投票已结束，无法继续投票</div>
+        <div class="alert alert-danger" v-if="error">{{ error }}</div>
+        <div class="alert alert-success" v-if="success">投票成功！</div>
+
+        <form @submit.prevent="submitVote" v-if="poll.active && !success">
+          <div class="form-check" v-for="option in poll.options" :key="option.option_id">
+            <input class="form-check-input" type="radio" :id="'option-'+option.option_id" v-model="selectedOption" :value="option.option_id">
+            <label class="form-check-label" :for="'option-'+option.option_id">
+              {{ option.content }}
+            </label>
+          </div>
+          <button type="submit" class="btn btn-primary mt-3" :disabled="!selectedOption || isSubmitting">提交投票</button>
+        </form>
+
+        <div v-if="!poll.active || success">
+          <h5>投票结果：</h5>
+          <div class="mb-3" v-for="option in poll.options" :key="option.option_id">
+            <div>{{ option.content }}: {{ option.count }} 票</div>
+            <div class="progress">
+              {% verbatim %}
+              <div class="progress-bar" role="progressbar" :style="{ width: calculatePercentage(option.count) + '%' }" :aria-valuenow="option.count" aria-valuemin="0" :aria-valuemax="totalVotes">
+                {{ calculatePercentage(option.count) }}%
+              </div>
+              {% endverbatim %}
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-secondary mt-3" @click="$emit('close')">返回</button>
+      </div>
+    </div>
+  `,
+  data() {
+    return {
+      selectedOption: null,
+      error: null,
+      success: false,
+      isSubmitting: false
+    };
+  },
+  computed: {
+    totalVotes() {
+      return this.poll.options.reduce((sum, option) => sum + option.count, 0);
+    }
+  },
+  methods: {
+    formatDate(dateString) {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      return date.toLocaleString();
+    },
+    calculatePercentage(count) {
+      if (this.totalVotes === 0) return 0;
+      return Math.round((count / this.totalVotes) * 100);
+    },
+    async submitVote() {
+      if (!this.selectedOption) return;
+
+      this.error = null;
+      this.isSubmitting = true;
+
+      try {
+        const token = localStorage.getItem('access_token');
+        await axios.post(`/polls/api/polls/${this.poll.poll_id}/vote/`, {
+          option_id: this.selectedOption
+        }, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        this.success = true;
+
+        // 更新当前poll中的选项计数
+        const option = this.poll.options.find(o => o.option_id === this.selectedOption);
+        if (option) {
+          option.count += 1;
         }
-    });
+
+        this.$emit('vote-submitted');
+      } catch (error) {
+        console.error('提交投票失败', error);
+        this.error = error.response?.data?.error || '投票失败';
+      } finally {
+        this.isSubmitting = false;
+      }
+    }
+  }
+};
+
+// 主应用
+new Vue({
+  el: '#pollApp',
+  components: {
+    'login-form': LoginForm,
+    'register-form': RegisterForm,
+    'profile-form': ProfileForm,
+    'poll-list': PollList,
+    'poll-form': PollForm,
+    'poll-edit-form': PollEditForm,
+    'poll-detail': PollDetail
+  },
+  data: {
+    isLoggedIn: false,
+    user: null,
+    currentView: 'login',
+    myPolls: [],
+    currentPoll: null,
+    showSearchForm: false,
+    searchIdentifier: '',
+    errorMsg: null
+  },
+  created() {
+    this.checkAuth();
+  },
+  methods: {
+    checkAuth() {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+        this.user = userData;
+        this.isLoggedIn = true;
+        this.currentView = 'myPolls';
+        this.fetchMyPolls();
+      }
+    },
+
+    handleLoginSuccess(userData) {
+      this.user = userData;
+      this.isLoggedIn = true;
+      this.currentView = 'myPolls';
+      this.fetchMyPolls();
+    },
+
+    handleProfileUpdate(userData) {
+      this.user = userData;
+    },
+
+    async logout() {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user_data');
+      this.isLoggedIn = false;
+      this.user = null;
+      this.currentView = 'login';
+    },
+
+    async fetchMyPolls() {
+      try {
+        const token = localStorage.getItem('access_token');
+        const response = await axios.get('/polls/api/polls/my-polls/', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        this.myPolls = response.data;
+      } catch (error) {
+        console.error('获取投票列表失败', error);
+        if (error.response && error.response.status === 401) {
+          this.refreshToken();
+        }
+      }
+    },
+
+    async refreshToken() {
+      try {
+        const refreshToken = localStorage.getItem('refresh_token');
+        if (!refreshToken) {
+          this.logout();
+          return;
+        }
+
+        const response = await axios.post('/polls/api/token/refresh/', {
+          refresh: refreshToken
+        });
+
+        localStorage.setItem('access_token', response.data.access);
+        return true;
+      } catch (error) {
+        this.logout();
+        return false;
+      }
+    },
+
+    editPoll(poll) {
+      this.currentPoll = JSON.parse(JSON.stringify(poll)); // 创建深拷贝
+      this.currentView = 'editPoll';
+    },
+
+    handlePollCreated() {
+      this.currentView = 'myPolls';
+      this.fetchMyPolls();
+    },
+
+    handlePollUpdated(updatedPoll) {
+      this.currentView = 'myPolls';
+      this.fetchMyPolls();
+    },
+
+    async findPoll() {
+      if (!this.searchIdentifier || this.searchIdentifier.length !== 8) {
+        alert('请输入8位投票码');
+        return;
+      }
+
+      try {
+        const response = await axios.get(`/polls/api/polls/find/${this.searchIdentifier}/`);
+        this.currentPoll = response.data;
+        this.currentView = 'pollDetail';
+        this.showSearchForm = false;
+      } catch (error) {
+        console.error('查找投票失败', error);
+        alert('未找到该投票：' + (error.response?.data?.error || '未知错误'));
+      }
+    },
+
+    handleVoteSubmitted() {
+      // 投票成功处理，可以刷新数据等
+    }
+  }
+});
 </script>
 {% endblock %}

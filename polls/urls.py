@@ -6,7 +6,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 router = DefaultRouter()
 router.register(r'customers', views.CustomerViewSet)
-router.register(r'polls', views.PollViewSet)
+# router.register(r'polls', views.PollViewSet)
 router.register(r'options', views.OptionViewSet)
 router.register(r'administrators', views.AdministratorViewSet)
 
@@ -27,7 +27,12 @@ urlpatterns = [
     path('api/profile/', views.ProfileAPIView.as_view(), name='profile'),
     path('api/token/', CustomerTokenObtainPairView.as_view(), name='token-obtain-pair'),
     path('', views.IndexView.as_view(), name='index'),
+    path('api/polls/create/', views.PollCreateAPIView.as_view(), name='poll-create'),
+    path('api/polls/my-polls/', views.UserPollsAPIView.as_view(), name='my-polls'),
+    path('api/polls/<int:pk>/update/', views.PollUpdateAPIView.as_view(), name='poll-update'),
+    path('api/polls/<int:pk>/delete/', views.PollDeleteAPIView.as_view(), name='poll-delete'),
+    path('api/polls/find/<str:identifier>/', views.get_poll_by_identifier, name='find-poll'),
 
-
+    path('api/polls/<int:poll_id>/results/', views.poll_results, name='poll-results'),
 
 ]

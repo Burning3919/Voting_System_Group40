@@ -1,3 +1,5 @@
+import random
+
 from django.contrib.auth.hashers import check_password
 from django.db import models
 from django.contrib.auth.models import User
@@ -34,12 +36,22 @@ class Administrator(models.Model):
 
 class Poll(models.Model):
     poll_id = models.AutoField(primary_key=True)
+    identifier = models.CharField(max_length=8, unique=True, blank=True)
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='polls')
-    title = models.CharField(max_length=10)
+    title = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
-    cut_off = models.DurationField()  # 投票截止时间
+    cut_off = models.DateTimeField(null=True, blank=True)  # 投票截止时间
     active = models.BooleanField(default=True)
 
+    def save(self, *args, **kwargs):
+        if not self.identifier:
+            # 生成8位随机数字标识符
+            while True:
+                identifier = ''.join([str(random.randint(0, 9)) for _ in range(8)])
+                if not Poll.objects.filter(identifier=identifier).exists():
+                    self.identifier = identifier
+                    break
+        super().save(*args, **kwargs)
     def __str__(self):
         return self.title
 
