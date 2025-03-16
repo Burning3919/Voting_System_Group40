@@ -1,0 +1,183 @@
+{% extends "polls/base.html" %}
+
+{% block content %}
+<div id="publicVoteApp">
+  <div class="container">
+    <div class="text-center mb-4">
+      <h2>公开投票</h2>
+      <p class="text-muted">无需登录即可参与投票</p>
+    </div>
+
+    <!-- 搜索投票表单 -->
+    <div v-if="!currentPoll" class="card mb-4">
+      <div class="card-body">
+        <h5 class="card-title">查找投票</h5>
+        <div class="alert alert-danger" v-if="error">{{ error }}</div>
+        <div class="input-group mb-3">
+          <input type="text" class="form-control" placeholder="请输入8位投票码" v-model="searchIdentifier" maxlength="8">
+          <button class="btn btn-primary" type="button" @click="findPoll" :disabled="isLoading">
+            <span v-if="isLoading">搜索中...</span>
+            <span v-else>查找</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 投票详情 -->
+    <div v-if="currentPoll" class="card mb-4">
+      <div class="card-body">
+        <h3 v-text="currentPoll.title"></h3>
+          {% verbatim %}
+        <p>
+          创建时间: {{ formatDate(currentPoll.created_at) }}<br>
+          截止时间: {{ formatDate(currentPoll.cut_off) }}<br>
+          <span class="badge" :class="currentPoll.active ? 'bg-success' : 'bg-danger'">
+            {{ currentPoll.active ? '进行中' : '已结束' }}
+          </span>
+          <span class="ms-2">投票码: {{ currentPoll.identifier }}</span>
+        </p>
+          {% endverbatim %}
+
+        <div class="alert alert-danger" v-if="!currentPoll.active">此投票已结束，无法继续投票</div>
+        <div class="alert alert-danger" v-if="voteError">{{ voteError }}</div>
+        <div class="alert alert-success" v-if="success">投票成功！</div>
+
+        <form @submit.prevent="submitVote" v-if="currentPoll.active && !success">
+          <div class="form-check" v-for="option in currentPoll.options" :key="option.option_id">
+            <input class="form-check-input" type="radio" :id="'option-'+option.option_id" v-model="selectedOption" :value="option.option_id">
+            <label class="form-check-label" :for="'option-'+option.option_id" v-text="option.content">
+            </label>
+          </div>
+          <button type="submit" class="btn btn-primary mt-3" :disabled="!selectedOption || isSubmitting">提交投票</button>
+        </form>
+
+        <div v-if="!currentPoll.active || success">
+          <h5>投票结果：</h5>
+          <div class="mb-3" v-for="option in currentPoll.options" :key="option.option_id">
+            <div><span v-text="option.content"></span>: {{ option.count }} 票</div>
+            <div class="progress">
+                {% verbatim %}
+              <div class="progress-bar" role="progressbar" :style="{ width: calculatePercentage(option.count) + '%' }" :aria-valuenow="option.count" aria-valuemin="0" :aria-valuemax="totalVotes">
+                {{ calculatePercentage(option.count) }}%
+              </div>
+              {% endverbatim %}
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-secondary mt-3" @click="reset">返回</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 参与者投票应用
+new Vue({
+  el: '#publicVoteApp',
+  delimiters: ['${', '}'], // 更改 Vue 的默认定界符，避免与 Django 模板冲突
+  data() {
+    return {
+      searchIdentifier: '',
+      currentPoll: null,
+      selectedOption: null,
+      error: null,
+      voteError: null,
+      success: false,
+      isLoading: false,
+      isSubmitting: false
+    };
+  },
+  computed: {
+    totalVotes() {
+      if (!this.currentPoll) return 0;
+      return this.currentPoll.options.reduce((sum, option) => sum + option.count, 0);
+    }
+  },
+  methods: {
+    formatDate(dateString) {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      return date.toLocaleString();
+    },
+
+    calculatePercentage(count) {
+      if (this.totalVotes === 0) return 0;
+      return Math.round((count / this.totalVotes) * 100);
+    },
+
+    async findPoll() {
+      if (!this.searchIdentifier || this.searchIdentifier.length !== 8) {
+        this.error = '请输入8位投票码';
+        return;
+      }
+
+      this.error = null;
+      this.isLoading = true;
+
+      try {
+        const response = await axios.get(`/polls/api/polls/find/${this.searchIdentifier}/`);
+        this.currentPoll = response.data;
+        console.log('获取到的投票数据:', this.currentPoll); // 调试信息
+      } catch (error) {
+        console.error('查找投票失败', error);
+        this.error = error.response?.data?.error || '未找到该投票';
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    async submitVote() {
+      if (!this.selectedOption) return;
+
+      this.voteError = null;
+      this.isSubmitting = true;
+
+      try {
+        // 参与者投票不需要认证
+        await axios.post(`/polls/api/polls/${this.currentPoll.poll_id}/public-vote/`, {
+          option_id: this.selectedOption
+        });
+
+        this.success = true;
+
+        // 更新当前poll中的选项计数
+        const option = this.currentPoll.options.find(o => o.option_id === this.selectedOption);
+        if (option) {
+          option.count += 1;
+        }
+
+        // 刷新投票结果
+        this.refreshResults();
+
+      } catch (error) {
+        console.error('提交投票失败', error);
+        this.voteError = error.response?.data?.error || '投票失败';
+      } finally {
+        this.isSubmitting = false;
+      }
+    },
+
+    async refreshResults() {
+      try {
+        const response = await axios.get(`/polls/api/polls/${this.currentPoll.poll_id}/results/`);
+        this.currentPoll = response.data;
+      } catch (error) {
+        console.error('获取投票结果失败', error);
+      }
+    },
+
+    reset() {
+      this.currentPoll = null;
+      this.selectedOption = null;
+      this.error = null;
+      this.voteError = null;
+      this.success = false;
+      this.searchIdentifier = '';
+    }
+  }
+});
+</script>
+{% endblock %}

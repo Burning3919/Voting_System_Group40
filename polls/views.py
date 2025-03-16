@@ -1,6 +1,6 @@
 from django.http import Http404
 from .jwt import get_tokens_for_customer, generate_token
-
+from django.views.generic import TemplateView
 from .serializers import (
     CustomerSerializer, PollSerializer, OptionSerializer,
     AdministratorSerializer, CustomerProfileSerializer,
@@ -331,3 +331,46 @@ def poll_results(request, poll_id):
     data['total_votes'] = total_votes
 
     return Response(data)
+
+
+# 公开投票页面视图
+class PublicVoteView(TemplateView):
+    template_name = "polls/public_vote.html"
+
+
+# 公开投票API (无需登录)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def public_vote(request, poll_id):
+    """
+    公开投票API，允许未登录用户进行投票
+    """
+    try:
+        poll = get_object_or_404(Poll, poll_id=poll_id)
+
+        # 检查投票是否已结束
+        if not poll.active:
+            return Response({"error": "此投票已结束"}, status=status.HTTP_400_BAD_REQUEST)
+
+        option_id = request.data.get('option_id')
+        if not option_id:
+            return Response({"error": "请选择一个选项"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 检查选项是否存在
+        option = get_object_or_404(Option, option_id=option_id, poll=poll)
+
+        # 增加投票计数
+        option.count += 1
+        option.save()
+
+        # 尝试更新缓存
+        try:
+            from .cache import increment_option_count, clear_poll_cache
+            increment_option_count(poll_id, option_id)
+        except Exception as e:
+            print(f"缓存更新失败: {str(e)}")
+
+        return Response({"status": "投票成功"})
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

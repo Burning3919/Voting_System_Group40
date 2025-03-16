@@ -34,5 +34,9 @@ urlpatterns = [
     path('api/polls/find/<str:identifier>/', views.get_poll_by_identifier, name='find-poll'),
 
     path('api/polls/<int:poll_id>/results/', views.poll_results, name='poll-results'),
+# 公开投票页面
+    path('public-vote/', views.PublicVoteView.as_view(), name='public-vote'),
+# 公开投票API
+    path('api/polls/<int:poll_id>/public-vote/', views.public_vote, name='public-vote-api'),
 
 ]
