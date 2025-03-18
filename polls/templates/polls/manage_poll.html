@@ -1,0 +1,47 @@
+{% extends 'polls/base.html' %}
+
+{% block content %}
+    <h2>{% if form.instance.id %}编辑问卷{% else %}新增问卷{% endif %}</h2>
+    <form method="post" action="{% url 'polls:manage_poll' %}">
+        {% csrf_token %}
+        <label for="title">Title:</label>
+        <input type="text" name="title" required><br>
+
+        <label for="cut_off">Cut off:</label>
+        <input type="datetime-local" name="cut_off" required><br>
+
+        <label for="active">Active:</label>
+        <input type="checkbox" name="active" checked><br>
+
+        <h3>选项列表</h3>
+        <div id="options-container">
+            <div>
+                <input type="text" name="options[]" placeholder="选项内容">
+                <button type="button" onclick="removeOption(this)">删除</button>
+            </div>
+        </div>
+
+        <button type="button" onclick="addOption()">添加选项</button>
+
+        <br>
+        <button type="submit">保存</button>
+        <a href="{% url 'polls:admin_dashboard' %}">返回后台</a>
+    </form>
+
+<script>
+    function addOption() {
+        let container = document.getElementById("options-container");
+        let newOption = document.createElement("div");
+        newOption.innerHTML = `
+            <input type="text" name="options[]" placeholder="选项内容">
+            <button type="button" onclick="removeOption(this)">删除</button>
+        `;
+        container.appendChild(newOption);
+    }
+
+    function removeOption(button) {
+        button.parentElement.remove();
+    }
+</script>
+
+{% endblock %}

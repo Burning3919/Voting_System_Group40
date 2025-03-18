@@ -1,0 +1,96 @@
+{% extends 'polls/base.html' %}
+
+{% block content %}
+    <div class="container">
+        <h2 class="title">📋 管理员后台</h2>
+        <div class="nav-links">
+            <a href="{% url 'polls:admin_logout' %}" class="btn logout-btn">🚪 退出</a>
+            <a href="{% url 'polls:manage_poll' %}" class="btn add-btn">➕ 新增问卷</a>
+        </div>
+
+        {% if polls %}
+            <div class="poll-list">
+                {% for poll in polls %}
+                    <div class="poll-card">
+                        <h3>{{ poll.title }}</h3>
+                        <p>📌 投票码：<strong>{{ poll.identifier }}</strong></p>
+                        <div class="actions">
+                            <a href="{% url 'polls:edit_poll' poll.poll_id %}" class="btn edit-btn">✏️ 编辑</a>
+                            <a href="{% url 'polls:delete_poll' poll.poll_id %}" class="btn delete-btn" onclick="return confirm('确认删除？');">🗑️ 删除</a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="no-data">🚫 当前没有问卷</p>
+        {% endif %}
+    </div>
+
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            width: 80%;
+            max-width: 800px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .title {
+            text-align: center;
+            color: #333;
+        }
+        .nav-links {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .btn {
+            text-decoration: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            margin: 5px;
+            display: inline-block;
+        }
+        .logout-btn { background: #dc3545; color: white; }
+        .add-btn { background: #28a745; color: white; }
+        .poll-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .poll-card {
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .poll-card h3 {
+            margin: 0;
+            color: #007bff;
+        }
+        .poll-card p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #555;
+        }
+        .actions {
+            margin-top: 10px;
+        }
+        .edit-btn { background: #007bff; color: white; }
+        .delete-btn { background: #dc3545; color: white; }
+        .no-data {
+            text-align: center;
+            color: #999;
+            font-size: 16px;
+        }
+    </style>
+{% endblock %}
