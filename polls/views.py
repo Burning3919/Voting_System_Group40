@@ -231,6 +231,54 @@ class UserPollsAPIView(generics.ListAPIView):
 
 
 # 更新投票问卷
+# class PollUpdateAPIView(generics.UpdateAPIView):
+#     serializer_class = PollUpdateSerializer
+#     permission_classes = [permissions.IsAuthenticated]
+#
+#     def get_queryset(self):
+#         return Poll.objects.filter(customer=self.request.user, active=True)
+#
+#     def update(self, request, *args, **kwargs):
+#         poll = self.get_object()
+#         serializer = self.get_serializer(poll, data=request.data, partial=True)
+#         serializer.is_valid(raise_exception=True)
+#
+#         # 更新投票问卷基本信息
+#         poll.title = serializer.validated_data.get('title', poll.title)
+#         poll.cut_off = serializer.validated_data.get('cut_off', poll.cut_off)
+#         poll.save()
+#
+#         # 处理现有选项的更新和删除
+#         if 'options' in serializer.validated_data:
+#             for option_data in serializer.validated_data['options']:
+#                 if option_data.get('delete', False):
+#                     # 删除选项
+#                     if 'option_id' in option_data:
+#                         try:
+#                             option = Option.objects.get(option_id=option_data['option_id'], poll=poll)
+#                             option.delete()
+#                         except Option.DoesNotExist:
+#                             pass
+#                 elif 'option_id' in option_data:
+#                     # 更新选项
+#                     try:
+#                         option = Option.objects.get(option_id=option_data['option_id'], poll=poll)
+#                         option.content = option_data['content']
+#                         option.save()
+#                     except Option.DoesNotExist:
+#                         pass
+#
+#         # 添加新选项
+#         if 'new_options' in serializer.validated_data:
+#             for option_text in serializer.validated_data['new_options']:
+#                 Option.objects.create(poll=poll, content=option_text)
+#
+#         # 清除缓存
+#         from .cache import clear_poll_cache
+#         clear_poll_cache(poll.poll_id)
+#
+#         # 返回更新后的投票问卷
+#         return Response(PollSerializer(poll).data)
 class PollUpdateAPIView(generics.UpdateAPIView):
     serializer_class = PollUpdateSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -248,30 +296,28 @@ class PollUpdateAPIView(generics.UpdateAPIView):
         poll.cut_off = serializer.validated_data.get('cut_off', poll.cut_off)
         poll.save()
 
-        # 处理现有选项的更新和删除
+        # 处理选项 - 合并新增与更新逻辑
         if 'options' in serializer.validated_data:
             for option_data in serializer.validated_data['options']:
-                if option_data.get('delete', False):
-                    # 删除选项
-                    if 'option_id' in option_data:
-                        try:
-                            option = Option.objects.get(option_id=option_data['option_id'], poll=poll)
-                            option.delete()
-                        except Option.DoesNotExist:
-                            pass
-                elif 'option_id' in option_data:
-                    # 更新选项
+                # 如果有选项ID，说明是更新或删除现有选项
+                if 'option_id' in option_data:
                     try:
                         option = Option.objects.get(option_id=option_data['option_id'], poll=poll)
-                        option.content = option_data['content']
-                        option.save()
+                        if option_data.get('delete', False):
+                            # 删除选项
+                            option.delete()
+                        else:
+                            # 更新选项
+                            option.content = option_data['content']
+                            option.save()
                     except Option.DoesNotExist:
                         pass
-
-        # 添加新选项
-        if 'new_options' in serializer.validated_data:
-            for option_text in serializer.validated_data['new_options']:
-                Option.objects.create(poll=poll, content=option_text)
+                # 没有选项ID，说明是新增选项
+                else:
+                    Option.objects.create(
+                        poll=poll,
+                        content=option_data['content']
+                    )
 
         # 清除缓存
         from .cache import clear_poll_cache
@@ -279,7 +325,6 @@ class PollUpdateAPIView(generics.UpdateAPIView):
 
         # 返回更新后的投票问卷
         return Response(PollSerializer(poll).data)
-
 
 # 删除投票问卷
 class PollDeleteAPIView(generics.DestroyAPIView):
