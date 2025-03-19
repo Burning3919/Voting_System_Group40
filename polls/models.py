@@ -42,6 +42,11 @@ class Poll(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     cut_off = models.DateTimeField(null=True, blank=True)  # 投票截止时间
     active = models.BooleanField(default=True)
+    chart_type = models.CharField(
+        max_length=10,
+        choices=[('barChart', 'Bar Chart'), ('pieChart', 'Pie Chart')],
+        default='barChart'
+    )
 
     def save(self, *args, **kwargs):
         if not self.identifier:
