@@ -30,6 +30,13 @@ urlpatterns = [
     path("api/admin/logout/", views.api_admin_logout, name="api_admin_logout"),
     path("api/admin/dashboard/", views.api_admin_dashboard, name="api_admin_dashboard"),
 
+# 投票 API
+    path('api/polls/create/', views.PollCreateAPIView.as_view(), name='poll-create'),
+    path('api/polls/my-polls/', views.UserPollsAPIView.as_view(), name='my-polls'),
+    path('api/polls/<int:pk>/update/', views.PollUpdateAPIView.as_view(), name='poll-update'),
+    path('api/polls/<int:pk>/delete/', views.PollDeleteAPIView.as_view(), name='poll-delete'),
+    path('api/polls/find/<str:identifier>/', views.get_poll_by_identifier, name='find-poll'),
+    path('api/polls/<int:poll_id>/results/', views.poll_results, name='poll-results'),
     # REST API
     path('api/', include(router.urls)),
 
@@ -43,13 +50,7 @@ urlpatterns = [
     path('api/token/', CustomerTokenObtainPairView.as_view(), name='token-obtain-pair'),
     path('', views.IndexView.as_view(), name='index'),
 
-    # 投票 API
-    path('api/polls/create/', views.PollCreateAPIView.as_view(), name='poll-create'),
-    path('api/polls/my-polls/', views.UserPollsAPIView.as_view(), name='my-polls'),
-    path('api/polls/<int:pk>/update/', views.PollUpdateAPIView.as_view(), name='poll-update'),
-    path('api/polls/<int:pk>/delete/', views.PollDeleteAPIView.as_view(), name='poll-delete'),
-    path('api/polls/find/<str:identifier>/', views.get_poll_by_identifier, name='find-poll'),
-    path('api/polls/<int:poll_id>/results/', views.poll_results, name='poll-results'),
+
 
     # 公开投票页面和 API
     path('public-vote/', views.PublicVoteView.as_view(), name='public-vote'),
