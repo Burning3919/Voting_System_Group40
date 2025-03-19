@@ -102,3 +102,6 @@ class PollUpdateSerializer(serializers.ModelSerializer):
         fields = ['title', 'cut_off', 'options', 'new_options']
 
 
+class AdminLoginSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    password = serializers.CharField(style={'input_type': 'password'})

@@ -2,15 +2,17 @@ from django.http import Http404
 from .jwt import get_tokens_for_customer, generate_token
 from django.views.generic import TemplateView
 import random
+import datetime
 
 from .serializers import (
     CustomerSerializer, PollSerializer, OptionSerializer,
     AdministratorSerializer, CustomerProfileSerializer,
-    ChangePasswordSerializer, LoginSerializer, PollCreateSerializer, PollUpdateSerializer
+    ChangePasswordSerializer, LoginSerializer, PollCreateSerializer, PollUpdateSerializer,
+    AdminLoginSerializer  # New serializer for admin login
 )
 from django.views.generic import TemplateView
 from rest_framework import viewsets, generics, permissions
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from django.contrib.auth.hashers import make_password
 
 from .models import Customer, Poll, Option, Administrator
@@ -24,11 +26,73 @@ from django.conf import settings
 from .models import Customer
 from .jwt import generate_token
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
+from django.shortcuts import render, get_object_or_404, redirect
 
+
+# New API version of admin_login
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def api_admin_login(request):
+    """API endpoint for admin login"""
+    username = request.data.get('username')
+    password = request.data.get('password')
+
+    user = authenticate(request, username=username, password=password)
+    if user is not None and user.is_staff:
+        login(request, user)
+        # Generate token for admin
+        token = generate_admin_token(user)
+        return Response({
+            'message': 'Login successful',
+            'token': token,
+            'user_id': user.id,
+            'username': user.username
+        }, status=status.HTTP_200_OK)
+    else:
+        return Response({
+            'error': 'Invalid username or password'
+        }, status=status.HTTP_401_UNAUTHORIZED)
+
+
+# Helper function to generate admin token
+def generate_admin_token(user):
+    """Generate a token for admin users"""
+    payload = {
+        'user_id': user.id,
+        'username': user.username,
+        'is_staff': user.is_staff,
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)
+    }
+    token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+    return token
+
+
+# New API version of admin_logout
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, IsAdminUser])
+def api_admin_logout(request):
+    """API endpoint for admin logout"""
+    logout(request)
+    return Response({
+        'message': 'Logout successful'
+    }, status=status.HTTP_200_OK)
+
+
+# New API version of admin_dashboard
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdminUser])
+def api_admin_dashboard(request):
+    """API endpoint for admin dashboard - returns all polls"""
+    polls = Poll.objects.all()
+    serializer = PollSerializer(polls, many=True)
+    return Response(serializer.data)
+
+
+# Keep the original template-based function for backward compatibility
 def admin_login(request):
     if request.method == "POST":
         username = request.POST["username"]
@@ -42,18 +106,17 @@ def admin_login(request):
             return render(request, "polls/admin_login.html", {"error": "用户名或密码错误"})
     return render(request, "polls/admin_login.html")  # ✅ 确保模板路径正确
 
+
 def admin_logout(request):
     logout(request)
     return redirect("polls:admin_login")
+
+
 def admin_dashboard(request):
     polls = Poll.objects.all()
     for poll in polls:
         print(f"Poll: {poll.title}, Poll ID: {poll.poll_id}")  # ✅ 确保 poll.poll_id 正确
     return render(request, "polls/admin_dashboard.html", {"polls": polls})
-
-from django.shortcuts import render, get_object_or_404, redirect
-from .models import Poll, Option
-from .forms import PollForm, OptionFormSet  # 确保表单集合被导入
 
 
 def edit_poll(request, poll_id):
@@ -84,11 +147,15 @@ def edit_poll(request, poll_id):
         form = PollForm(instance=poll)
 
     return render(request, "polls/edit_poll.html", {"form": form, "options": options})
+
+
 def delete_option(request, option_id):
     option = get_object_or_404(Option, pk=option_id)
     poll_id = option.poll.poll_id  # 先获取问卷 ID
     option.delete()  # 删除选项
     return redirect('polls:edit_poll', poll_id=poll_id)  # 重定向回编辑页面
+
+
 @login_required
 @staff_member_required
 def manage_poll(request):
@@ -112,11 +179,11 @@ def manage_poll(request):
 
     return render(request, "polls/manage_poll.html", {"form": form})
 
+
 def delete_poll(request, poll_id):
     poll = get_object_or_404(Poll, poll_id=poll_id)  # 确保 poll_id 而不是 id
     poll.delete()
     return redirect("polls:admin_dashboard")
-
 
 
 # 用户注册API
@@ -138,8 +205,6 @@ class RegisterAPIView(generics.CreateAPIView):
             'refresh': tokens['refresh'],
             'access': tokens['access'],
         }, status=status.HTTP_201_CREATED)
-
-
 
 
 # 用户登录API
@@ -201,6 +266,8 @@ class CustomerPollsAPIView(generics.ListAPIView):
 
     def get_queryset(self):
         return Poll.objects.filter(customer=self.request.user)
+
+
 class IndexView(TemplateView):
     template_name = "polls/index.html"
 
@@ -469,9 +536,7 @@ def public_vote(request, poll_id):
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
 def view_poll(request, poll_id):
-
     poll = get_object_or_404(Poll, poll_id=poll_id)
     options = poll.options.all()
     return render(request, "polls/view_poll.html", {"poll": poll, "options": options})
