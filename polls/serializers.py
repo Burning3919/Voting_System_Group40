@@ -45,12 +45,19 @@ class OptionSerializer(serializers.ModelSerializer):
         fields = ['option_id', 'content', 'count']
         read_only_fields = ['option_id', 'count']
 
+# class PollSerializer(serializers.ModelSerializer):
+#     options = OptionSerializer(many=True, read_only=True)
+#
+#     class Meta:
+#         model = Poll
+#         fields = ['poll_id', 'identifier', 'title', 'created_at', 'cut_off', 'active', 'options']
+#         read_only_fields = ['poll_id', 'identifier', 'created_at']
 class PollSerializer(serializers.ModelSerializer):
     options = OptionSerializer(many=True, read_only=True)
 
     class Meta:
         model = Poll
-        fields = ['poll_id', 'identifier', 'title', 'created_at', 'cut_off', 'active', 'options']
+        fields = ['poll_id', 'identifier', 'title', 'created_at', 'cut_off', 'active', 'options', 'chart_type']
         read_only_fields = ['poll_id', 'identifier', 'created_at']
 
 class AdministratorSerializer(serializers.ModelSerializer):
@@ -70,7 +77,7 @@ class PollCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Poll
-        fields = ['poll_id', 'title', 'cut_off', 'options', 'identifier']
+        fields = ['poll_id', 'title', 'cut_off', 'options', 'identifier', 'chart_type']
         read_only_fields = ['poll_id', 'identifier']
 
     def create(self, validated_data):
@@ -90,16 +97,7 @@ class OptionUpdateSerializer(serializers.Serializer):
     delete = serializers.BooleanField(default=False, required=False)
 
 
-# class PollUpdateSerializer(serializers.ModelSerializer):
-#     options = OptionUpdateSerializer(many=True, required=False)
-#     new_options = serializers.ListField(
-#         child=serializers.CharField(max_length=50),
-#         required=False
-#     )
-#
-#     class Meta:
-#         model = Poll
-#         fields = ['title', 'cut_off', 'options', 'new_options']
+# PollUpdateSerializer 修改
 class PollUpdateSerializer(serializers.ModelSerializer):
     options = serializers.ListField(
         child=serializers.DictField(),
@@ -108,6 +106,6 @@ class PollUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Poll
-        fields = ['title', 'cut_off', 'options']
+        fields = ['title', 'cut_off', 'options', 'chart_type']
 
 

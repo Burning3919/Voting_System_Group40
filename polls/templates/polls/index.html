@@ -274,7 +274,8 @@ const PollList = {
                 <span class="badge" :class="poll.active ? 'bg-success' : 'bg-danger'">
                   {{ poll.active ? '进行中' : '已结束' }}
                 </span>
-                <span class="ms-2">投票码: {{ poll.identifier }}</span>
+                <span class="ms-2">投票码: {{ poll.identifier }}</span><br>
+                <span>图表类型: {{ poll.chart_type === 'pie' ? '饼图' : '柱状图' }}</span>
                 {% endverbatim %}
               </p>
               <h6>选项:</h6>
@@ -344,6 +345,14 @@ const PollForm = {
           </div>
 
           <div class="mb-3">
+            <label class="form-label">图表类型</label>
+            <select class="form-select" v-model="form.chart_type">
+              <option value="barChart">柱状图</option>
+              <option value="pieChart">饼图</option>
+            </select>
+          </div>
+
+          <div class="mb-3">
             <label class="form-label">选项</label>
             <div v-for="(option, index) in form.options" :key="index" class="input-group mb-2">
               <input type="text" class="form-control" v-model="form.options[index]" required>
@@ -362,7 +371,8 @@ const PollForm = {
       form: {
         title: '',
         cut_off: this.getDefaultCutOffTime(),
-        options: ['', '']
+        options: ['', ''],
+        chart_type: 'barChart' // 默认为柱状图
       },
       error: null,
       isSubmitting: false
@@ -387,6 +397,7 @@ const PollForm = {
       this.isSubmitting = true;
 
       try {
+        console.log("提交的表单数据:", this.form);
         const token = localStorage.getItem('access_token');
         const response = await axios.post('/polls/api/polls/create/', this.form, {
           headers: {
@@ -398,7 +409,8 @@ const PollForm = {
         this.form = {
           title: '',
           cut_off: this.getDefaultCutOffTime(),
-          options: ['', '']
+          options: ['', ''],
+          chart_type: 'barChart'
         };
 
         this.$emit('poll-created', response.data);
@@ -432,6 +444,14 @@ const PollEditForm = {
           </div>
 
           <div class="mb-3">
+            <label class="form-label">图表类型</label>
+            <select class="form-select" v-model="form.chart_type">
+              <option value="barChart">柱状图</option>
+              <option value="pieChart">饼图</option>
+            </select>
+          </div>
+
+          <div class="mb-3">
             <label class="form-label">选项</label>
             <!-- 现有选项 -->
             <div v-for="option in form.options" :key="option.option_id || 'new-'+option._tempId" class="input-group mb-2">
@@ -455,6 +475,7 @@ const PollEditForm = {
       form: {
         title: this.poll.title,
         cut_off: this.formatDateForInput(this.poll.cut_off),
+        chart_type: this.poll.chart_type || 'barChart', // 使用当前图表类型，默认为柱状图
         options: this.poll.options.map(option => ({
           option_id: option.option_id,
           content: option.content,
@@ -497,11 +518,11 @@ const PollEditForm = {
       try {
         const token = localStorage.getItem('access_token');
 
-        // 准备更新数据 - 只需要发送 options 数组
-        // 这里的数据结构已经合并了现有选项和新选项
+        // 准备更新数据
         const updateData = {
           title: this.form.title,
           cut_off: this.form.cut_off,
+          chart_type: this.form.chart_type,
           options: this.form.options.map(option => {
             if (option.option_id) {
               // 现有选项保留 option_id, content 和 delete 属性
@@ -550,10 +571,10 @@ const PollDetail = {
           <small class="text-muted">截止时间: {{ formatDate(poll.cut_off) }}</small><br>
 
           <span class="badge" :class="poll.active ? 'bg-success' : 'bg-danger'">
-
             {{ poll.active ? '进行中' : '已结束' }}
           </span>
-          <span class="ms-2">投票码: {{ poll.identifier }}</span>
+          <span class="ms-2">投票码: {{ poll.identifier }}</span><br>
+          <span class="mt-2">图表类型: {{ chartTypeText }}</span>
           {% endverbatim %}
         </p>
 
@@ -573,6 +594,7 @@ const PollDetail = {
 
         <div v-if="!poll.active || success">
           <h5>投票结果：</h5>
+          <p>图表类型: {{ chartTypeText }}</p>
           <div class="mb-3" v-for="option in poll.options" :key="option.option_id">
             <div>{{ option.content }}: {{ option.count }} 票</div>
             <div class="progress">
@@ -600,6 +622,9 @@ const PollDetail = {
   computed: {
     totalVotes() {
       return this.poll.options.reduce((sum, option) => sum + option.count, 0);
+    },
+    chartTypeText() {
+      return this.poll.chart_type === 'pie' ? '饼图' : '柱状图';
     }
   },
   methods: {
