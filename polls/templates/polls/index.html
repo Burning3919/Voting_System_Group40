@@ -432,22 +432,16 @@ const PollEditForm = {
           </div>
 
           <div class="mb-3">
-            <label class="form-label">现有选项</label>
-            <div v-for="option in form.options" :key="option.option_id" class="input-group mb-2">
+            <label class="form-label">选项</label>
+            <!-- 现有选项 -->
+            <div v-for="option in form.options" :key="option.option_id || 'new-'+option._tempId" class="input-group mb-2">
               <input type="text" class="form-control" v-model="option.content" required>
-              <button type="button" class="btn btn-danger" @click="option.delete = true" v-if="!option.delete">删除</button>
+              <button type="button" class="btn btn-danger" @click="markOptionForDeletion(option)" v-if="!option.delete && option.option_id">删除</button>
               <button type="button" class="btn btn-success" @click="option.delete = false" v-if="option.delete">恢复</button>
+              <button type="button" class="btn btn-danger" @click="removeNewOption(option)" v-if="!option.option_id">删除</button>
               <div class="form-text w-100 text-danger" v-if="option.delete">此选项将被删除</div>
             </div>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label">新增选项</label>
-            <div v-for="(option, index) in form.new_options" :key="'new-'+index" class="input-group mb-2">
-              <input type="text" class="form-control" v-model="form.new_options[index]" required>
-              <button type="button" class="btn btn-danger" @click="removeNewOption(index)">删除</button>
-            </div>
-            <button type="button" class="btn btn-secondary" @click="addNewOption">添加新选项</button>
+            <button type="button" class="btn btn-secondary" @click="addNewOption">添加选项</button>
           </div>
 
           <button type="submit" class="btn btn-primary" :disabled="isSubmitting">保存更改</button>
@@ -465,9 +459,9 @@ const PollEditForm = {
           option_id: option.option_id,
           content: option.content,
           delete: false
-        })),
-        new_options: []
+        }))
       },
+      nextTempId: 1,
       error: null,
       isSubmitting: false
     };
@@ -479,10 +473,22 @@ const PollEditForm = {
       return date.toISOString().slice(0, 16); // 格式化为datetime-local输入框所需的格式
     },
     addNewOption() {
-      this.form.new_options.push('');
+      // 为新选项添加临时ID以便在UI中追踪
+      this.form.options.push({
+        _tempId: this.nextTempId++,
+        content: '',
+      });
     },
-    removeNewOption(index) {
-      this.form.new_options.splice(index, 1);
+    removeNewOption(option) {
+      const index = this.form.options.findIndex(o =>
+        !o.option_id && o._tempId === option._tempId
+      );
+      if (index !== -1) {
+        this.form.options.splice(index, 1);
+      }
+    },
+    markOptionForDeletion(option) {
+      option.delete = true;
     },
     async updatePoll() {
       this.error = null;
@@ -491,12 +497,26 @@ const PollEditForm = {
       try {
         const token = localStorage.getItem('access_token');
 
-        // 准备更新数据
+        // 准备更新数据 - 只需要发送 options 数组
+        // 这里的数据结构已经合并了现有选项和新选项
         const updateData = {
           title: this.form.title,
           cut_off: this.form.cut_off,
-          options: this.form.options,
-          new_options: this.form.new_options
+          options: this.form.options.map(option => {
+            if (option.option_id) {
+              // 现有选项保留 option_id, content 和 delete 属性
+              return {
+                option_id: option.option_id,
+                content: option.content,
+                delete: option.delete || false
+              };
+            } else {
+              // 新选项只需要 content 属性
+              return {
+                content: option.content
+              };
+            }
+          })
         };
 
         const response = await axios.put(`/polls/api/polls/${this.poll.poll_id}/update/`, updateData, {

@@ -90,15 +90,24 @@ class OptionUpdateSerializer(serializers.Serializer):
     delete = serializers.BooleanField(default=False, required=False)
 
 
+# class PollUpdateSerializer(serializers.ModelSerializer):
+#     options = OptionUpdateSerializer(many=True, required=False)
+#     new_options = serializers.ListField(
+#         child=serializers.CharField(max_length=50),
+#         required=False
+#     )
+#
+#     class Meta:
+#         model = Poll
+#         fields = ['title', 'cut_off', 'options', 'new_options']
 class PollUpdateSerializer(serializers.ModelSerializer):
-    options = OptionUpdateSerializer(many=True, required=False)
-    new_options = serializers.ListField(
-        child=serializers.CharField(max_length=50),
+    options = serializers.ListField(
+        child=serializers.DictField(),
         required=False
     )
 
     class Meta:
         model = Poll
-        fields = ['title', 'cut_off', 'options', 'new_options']
+        fields = ['title', 'cut_off', 'options']
 
 
