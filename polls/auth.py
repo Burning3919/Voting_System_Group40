@@ -3,6 +3,7 @@ from rest_framework.exceptions import AuthenticationFailed
 import jwt
 from django.conf import settings
 from .models import Customer
+from .models import Administrator
 
 
 class CustomerAuthentication(BaseAuthentication):
@@ -22,6 +23,14 @@ class CustomerAuthentication(BaseAuthentication):
                 settings.SECRET_KEY,
                 algorithms=['HS256']
             )
+
+            admin_id = payload.get('admin_id')
+
+            if admin_id:
+                admin = Administrator.objects.get(admin_id=admin_id)
+                if not admin:
+                    raise AuthenticationFailed('用户不存在')
+                return (admin, token)
 
             # 获取用户ID
             user_id = payload.get('user_id')
