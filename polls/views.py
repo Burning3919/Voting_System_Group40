@@ -89,7 +89,7 @@ def generate_admin_token(user):
 
 # New API version of admin_logout
 @api_view(['POST'])
-@permission_classes([IsAuthenticated, IsAdminUser])
+@permission_classes([AllowAny])
 def api_admin_logout(request):
     """API endpoint for admin logout"""
     logout(request)
@@ -100,7 +100,7 @@ def api_admin_logout(request):
 
 # New API version of admin_dashboard
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsAdminUser])
+@permission_classes([AllowAny])
 def api_admin_dashboard(request):
     """API endpoint for admin dashboard - returns all polls"""
     polls = Poll.objects.all()
