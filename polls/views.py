@@ -24,6 +24,7 @@ from rest_framework import status
 import jwt
 from django.conf import settings
 from .models import Customer
+from .models import Administrator
 from .jwt import generate_token
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
@@ -37,34 +38,49 @@ from django.shortcuts import render, get_object_or_404, redirect
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def api_admin_login(request):
-    """API endpoint for admin login"""
-    username = request.data.get('username')
+    """API endpoint for admin login using Administrator model"""
+    # 获取请求数据
+    admin_id = request.data.get('username')  # 使用admin_id而不是username
     password = request.data.get('password')
 
-    user = authenticate(request, username=username, password=password)
-    if user is not None and user.is_staff:
-        login(request, user)
-        # Generate token for admin
-        token = generate_admin_token(user)
+    # 添加调试信息
+    # print(f"Login attempt - admin_id: {admin_id}")
+
+    if not admin_id or not password:
         return Response({
-            'message': 'Login successful',
-            'token': token,
-            'user_id': user.id,
-            'username': user.username
-        }, status=status.HTTP_200_OK)
-    else:
+            'error': 'please provide id and password'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # 直接查询Administrator模型
+        admin = Administrator.objects.get(admin_id=admin_id)
+
+        # 验证密码
+        if admin.admin_psw == password:  # 注意：这里是明文比较，生产环境不推荐
+            # 生成管理员令牌
+            token = generate_admin_token(admin)
+
+            return Response({
+                'message': 'login success',
+                'token': token,
+                'admin_id': admin.admin_id
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'error': 'password error'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+    except Administrator.DoesNotExist:
         return Response({
-            'error': 'Invalid username or password'
-        }, status=status.HTTP_401_UNAUTHORIZED)
+            'error': 'admin not exist!'
+        }, status=status.HTTP_404_NOT_FOUND)
 
 
 # Helper function to generate admin token
 def generate_admin_token(user):
     """Generate a token for admin users"""
     payload = {
-        'user_id': user.id,
-        'username': user.username,
-        'is_staff': user.is_staff,
+        'admin_id': user.admin_id,
         'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1)
     }
     token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
